@@ -29,14 +29,14 @@ class Worker(multiprocessing.Process):
 	def doExit(self):
 		pass
 
-	def onDo(self):
+	def onWork(self):
 		pass
 
 	def work(self, *args, **kwargs):
 		self.onEnter()
 		try:
 			while self.enabled.wait(timeout=self.settings['deadline']):
-				self.onDo()
+				self.onWork()
 				time.sleep(self.settings['naptime'])
 		except KeyboardInterrupt:
 			pass

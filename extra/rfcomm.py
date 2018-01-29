@@ -27,7 +27,7 @@ class RFCOMMsocket(object):
 			self.devname = devname
 			self.devch = channel
 			return True
-		except:
+		except Exception:
 			return False
 
 	def bind(self, devmac=None, channel=1):
@@ -41,7 +41,7 @@ class RFCOMMsocket(object):
 			self.devname = devmac
 			self.devch = channel
 			return True
-		except:
+		except Exception:
 			return False
 
 	def close(self):
@@ -79,7 +79,7 @@ class RFCOMMsocket(object):
 			while len(frame) > 0:
 				tp = framap[frame[:1]]
 				content += struct.unpack('<x' + tp[0], frame[:1 + tp[1]])
-		except:
+		except Exception:
 			pass
 		finally:
 			return content
@@ -123,7 +123,7 @@ class RFCOMMsocket(object):
 					except KeyboardInterrupt:
 						print()
 						break
-					except:
+					except Exception:
 						continue
 				else:
 					bd_i = 0
