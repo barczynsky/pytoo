@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
+import collections
 import functools
+import io
 import re
 
 
@@ -67,3 +69,34 @@ class File:
 		def close(self):
 			for f in self.__F:
 				f.close()
+
+
+# ----------------------------------------------------------------------------
+# -------------------------------  io add-ons  -------------------------------
+# ----------------------------------------------------------------------------
+class TextIOLoopback(io.TextIOWrapper):
+	def __init__(self, b, **kwargs):
+		self.__file__ = b
+		if hasattr(b, 'mode'):
+			self.mode = b.mode
+		self.__loopback__ = []
+		super().__init__(b, **kwargs)
+
+	def fileno(self):
+		if self.__loopback__:
+			return 10000 + self.__file__.fileno()
+		return self.__file__.fileno()
+
+	def readline(self, size=-1):
+		if self.__loopback__:
+			e = self.__loopback__[0]
+			if 0 >= size or size >= len(e) >= 0:
+				return self.__loopback__.pop(0)
+			(b, self.__loopback__[0]) = (e[:size], e[size:])
+			return b
+		return self.__file__.readline(size)
+
+	def lwrite(self, *lines):
+		for line in lines:
+			self.__loopback__.extend(line.splitlines())
+		return sum(map(len, lines))
