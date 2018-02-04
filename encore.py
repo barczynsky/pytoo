@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import collections
 import functools
 import io
 import re
@@ -48,53 +47,130 @@ def take_match(s: str, pattern: str):
 # ----------------------------------------------------------------------------
 # -----------------------------  open() add-ons  -----------------------------
 # ----------------------------------------------------------------------------
-class File:
-	class Popen(object):
-		def __init__(self, f):
-			self.stdin = f
-			self.stdout = f
+class PopenWrapper(object):
+	def __init__(self, fo):
+		self.__fo__ = fo
+		self.stdin = fo
+		self.stdout = fo
+		self.stderr = fo
 
-	class Ptee(object):
-		def __init__(self, *F):
-			self.__F = F
 
-		def write(self, b):
-			if self.__F:
-				count = set()
-				for f in self.__F:
-					count.add(f.write(b))
-				return min(count)
-			return 0
+# ----------------------------------------------------------------------------
+# ------------------------------  tee() add-on  ------------------------------
+# ----------------------------------------------------------------------------
+def tee(fo, *tee, buffering: int=-1, closefd: bool=False):
+	if isinstance(fo, io.TextIOBase):
+		def wrap(fo, line_buffering):
+			if isinstance(fo, io.TextIOBase):
+				return fo
+			# if hasattr(fo, 'buffer'):
+			# 	fo = fo.buffer
+			return io.TextIOWrapper(fo, line_buffering=line_buffering)
+		line_buffering = False
+		if hasattr(fo, 'line_buffering'):
+			line_buffering = fo.line_buffering
+		return TextIOTee(fo, *(wrap(fo, line_buffering) for fo in tee), closefd=closefd, line_buffering=line_buffering)
+	else:
+		def spill(fo):
+			if isinstance(fo, io.TextIOBase) and hasattr(fo, 'buffer'):
+				return fo.buffer
+			return fo
+		if buffering:
+			return BufferedIOTee(fo, *(spill(fo) for fo in tee), closefd=closefd)
+		else:
+			return FileIOTee(fo, *(spill(fo) for fo in tee), closefd=closefd)
 
-		def close(self):
-			for f in self.__F:
-				f.close()
+
+class TextIOTee(io.TextIOWrapper):
+	def __init__(self, fo, *tee, closefd: bool=False, **kwargs):
+		self.__fo__ = fo
+		self.__tee__ = tee
+		self.closefd = closefd
+		if hasattr(fo, 'mode'):
+			self.mode = fo.mode
+		# if hasattr(fo, 'buffer'):
+		# 	fo = fo.buffer
+		super().__init__(fo, **kwargs)
+
+	def write(self, s: str):
+		return min(fo.write(s) for fo in (self.__fo__, *self.__tee__))
+
+	def close(self):
+		if self.closefd:
+			self.__fo__.close()
+		return any(fo.close() for fo in self.__tee__)
+
+
+class BufferedIOTee(io.BufferedWriter):
+	def __init__(self, fo, *tee, closefd: bool=False, **kwargs):
+		self.__fo__ = fo
+		self.__tee__ = tee
+		self.closefd = closefd
+		# if hasattr(fo, 'buffer'):
+		# 	fo = fo.buffer
+		super().__init__(fo, **kwargs)
+
+	def write(self, b: bytes):
+		return min(fo.write(b) for fo in (self.__fo__, *self.__tee__))
+
+	def close(self):
+		if self.closefd:
+			self.__fo__.close()
+		return any(fo.close() for fo in self.__tee__)
+
+
+class FileIOTee(io.FileIO):
+	def __init__(self, fo, *tee, mode='r', closefd: bool=False, **kwargs):
+		self.__fo__ = fo
+		self.__tee__ = tee
+		if hasattr(fo, 'mode'):
+			mode = fo.mode
+		super().__init__(fo.fileno(), mode=mode, closefd=closefd, **kwargs)
+		if hasattr(fo, 'name'):
+			self.name = fo.name
+
+	def write(self, b: bytes):
+		return min(fo.write(b) for fo in (self.__fo__, *self.__tee__))
+
+	def close(self):
+		if self.closefd:
+			self.__fo__.close()
+		return any(fo.close() for fo in self.__tee__)
 
 
 # ----------------------------------------------------------------------------
 # -------------------------------  io add-ons  -------------------------------
 # ----------------------------------------------------------------------------
 class TextIOLoopback(io.TextIOWrapper):
-	def __init__(self, b, **kwargs):
-		self.__file__ = b
-		if hasattr(b, 'mode'):
-			self.mode = b.mode
+	def __init__(self, fo, line_buffering: bool=False, closefd: bool=False, **kwargs):
 		self.__loopback__ = []
-		super().__init__(b, **kwargs)
+		self.__fo__ = fo
+		self.closefd = closefd
+		if hasattr(fo, 'line_buffering'):
+			line_buffering = fo.line_buffering
+		if hasattr(fo, 'mode'):
+			self.mode = fo.mode
+		# if hasattr(fo, 'buffer'):
+		# 	fo = fo.buffer
+		super().__init__(fo, line_buffering=line_buffering, **kwargs)
 
 	def fileno(self):
 		if self.__loopback__:
-			return 10000 + self.__file__.fileno()
-		return self.__file__.fileno()
+			return 10000 + self.__fo__.fileno()
+		return self.__fo__.fileno()
 
-	def readline(self, size=-1):
+	def close(self):
+		if self.closefd:
+			self.__fo__.close()
+
+	def readline(self, size: int=-1):
 		if self.__loopback__:
 			e = self.__loopback__[0]
 			if 0 >= size or size >= len(e) >= 0:
 				return self.__loopback__.pop(0)
-			(b, self.__loopback__[0]) = (e[:size], e[size:])
-			return b
-		return self.__file__.readline(size)
+			(s, self.__loopback__[0]) = (e[:size], e[size:])
+			return s
+		return self.__fo__.readline(size)
 
 	def lwrite(self, *lines):
 		for line in lines:
