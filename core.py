@@ -89,3 +89,28 @@ class cmdict(dict):
 			self[None]()  # leaf
 			return True
 		return False
+
+
+# ----------------------------------------------------------------------------
+# ------------------------------  str w/ hint  -------------------------------
+# ----------------------------------------------------------------------------
+class hstr(str):
+	__slots__ = ('__hint__',)
+
+	def __new__(cls, s='', hint: str='', *args, **kw):
+		self = str.__new__(cls, s, *args, **kw)
+		self.__hint__ = hint
+		return self
+
+	def __repr__(self):
+		if self.__hint__ == '':
+			return super().__repr__()
+		else:
+			return '{}({}, {})'.format(
+				self.__class__.__name__,
+				super().__repr__(),
+				self.__hint__.__repr__(),
+			)
+
+	def hint(self):
+		return self.__hint__
