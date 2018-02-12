@@ -1,28 +1,6 @@
 # -*- coding: utf-8 -*-
-import functools
 import io
 import re
-
-
-# ----------------------------------------------------------------------------
-# ---------------------------  functools add-ons  ----------------------------
-# ----------------------------------------------------------------------------
-class bind(functools.partial):
-	def __repr__(self):
-		return '{}({}, ...)'.format(
-			self.func,
-			', '.join(map(str, self.args)),
-		)
-
-
-def bindmap(func, *argpacks):
-	if not all(isinstance(ap, (tuple, list, dict)) for ap in argpacks):
-		return ()
-	for (i, ap) in zip(range(len(argpacks)), argpacks[:]):
-		if isinstance(ap, dict):
-			argpacks[i:i + 1] = zip(*ap.items())
-	# return zip(*argpacks[:1], map(lambda *packs: lambda *args: func(*packs, *args), *argpacks))
-	return zip(*argpacks[:1], map(bind, iter(lambda: func, None), *argpacks))
 
 
 # ----------------------------------------------------------------------------
@@ -139,7 +117,7 @@ class FileIOTee(io.FileIO):
 
 
 # ----------------------------------------------------------------------------
-# -------------------------------  io add-ons  -------------------------------
+# --------------------------  TextIOWrapper add-on  --------------------------
 # ----------------------------------------------------------------------------
 class TextIOLoopback(io.TextIOWrapper):
 	def __init__(self, fo, line_buffering: bool=False, closefd: bool=False, **kwargs):
@@ -176,3 +154,28 @@ class TextIOLoopback(io.TextIOWrapper):
 		for line in lines:
 			self.__loopback__.extend(line.splitlines())
 		return sum(map(len, lines))
+
+
+# ----------------------------------------------------------------------------
+# ---------------------------  hintful str add-on  ---------------------------
+# ----------------------------------------------------------------------------
+class hstr(str):
+	__slots__ = ('__hint__',)
+
+	def __new__(cls, s='', hint: str='', *args, **kw):
+		self = str.__new__(cls, s, *args, **kw)
+		self.__hint__ = hint
+		return self
+
+	def __repr__(self):
+		if self.__hint__ == '':
+			return super().__repr__()
+		else:
+			return '{}({}, {})'.format(
+				self.__class__.__name__,
+				super().__repr__(),
+				self.__hint__.__repr__(),
+			)
+
+	def hint(self):
+		return self.__hint__

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import functools
 import signal
 
 
@@ -24,6 +25,27 @@ class KeyboardInterruptForward(object):
 		signal.signal(signal.SIGINT, self.__SIGINT)
 		for sig in self.__FWD:
 			self.__SIGINT(*sig)
+
+
+# ----------------------------------------------------------------------------
+# -----------------------------  bind & bindmap  -----------------------------
+# ----------------------------------------------------------------------------
+class bind(functools.partial):
+	def __repr__(self):
+		return '{}({}...)'.format(
+			self.func,
+			', '.join(map(str, self.args + ('',))),
+		)
+
+
+def bindmap(func, *argpacks):
+	if not all(isinstance(ap, (tuple, list, dict)) for ap in argpacks):
+		return ()
+	for (i, ap) in zip(range(len(argpacks)), argpacks[:]):
+		if isinstance(ap, dict):
+			argpacks[i:i + 1] = zip(*ap.items())
+	# return zip(*argpacks[:1], map(lambda *packs: lambda *args: func(*packs, *args), *argpacks))
+	return zip(*argpacks[:1], map(bind, iter(lambda: func, None), *argpacks))
 
 
 # ----------------------------------------------------------------------------
@@ -89,28 +111,3 @@ class cmdict(dict):
 			self[None]()  # leaf
 			return True
 		return False
-
-
-# ----------------------------------------------------------------------------
-# ------------------------------  str w/ hint  -------------------------------
-# ----------------------------------------------------------------------------
-class hstr(str):
-	__slots__ = ('__hint__',)
-
-	def __new__(cls, s='', hint: str='', *args, **kw):
-		self = str.__new__(cls, s, *args, **kw)
-		self.__hint__ = hint
-		return self
-
-	def __repr__(self):
-		if self.__hint__ == '':
-			return super().__repr__()
-		else:
-			return '{}({}, {})'.format(
-				self.__class__.__name__,
-				super().__repr__(),
-				self.__hint__.__repr__(),
-			)
-
-	def hint(self):
-		return self.__hint__
