@@ -72,8 +72,8 @@ class cmdict(dict):
 		return 1 == sum(c.startswith(key) for c in self if isinstance(c, str))
 
 	def __setitem__(self, key, value):
-		if not isinstance(key, str):
-			raise KeyError('key must be a string, not \'{}\''.format(type(key).__name__))
+		if not isinstance(key, (str, type(None))):
+			raise KeyError('key must be a string or None, not \'{}\''.format(type(key).__name__))
 		return super().__setitem__(key, value)
 
 	def __getitem__(self, key):
@@ -91,23 +91,86 @@ class cmdict(dict):
 	def __missing__(self, key):
 		return None
 
-	def getkey(self, key):
-		if not isinstance(key, str):
-			return None
-		return next((c for c in self if isinstance(c, str) and c.startswith(key)), None)
+	def update(self, other, **kwargs):
+		if not isinstance(other, (list, tuple, dict)):
+			raise TypeError('\'{}\' object is not iterable'.format(type(other).__name__))
+
+		if isinstance(other, dict):
+			other = other.items()
+		for kvlist in other:
+			if kvlist:
+				self.extend(kvlist)
+		for kvlist in kwargs:
+			self.extend(kvlist)
+		return None
+
+	@staticmethod
+	def fromargs(*args):
+		d = cmdict()
+		d.extend(args)
+		return d
+
+	def __add__(self, seq):
+		return self.extend(seq)
+
+	def extend(self, seq):
+		if isinstance(seq, dict):
+			self.update(seq)
+			return self
+
+		if not isinstance(seq, (list, tuple)):
+			raise TypeError('\'{}\' object is not iterable'.format(type(seq).__name__))
+
+		(k, *kvlist) = seq or [None]
+		if not isinstance(k, (str, type(None))):
+			raise ValueError('key must be a string or None, not \'{}\''.format(type(k).__name__))
+
+		if kvlist:
+			v = kvlist[0]
+			if k not in self:
+				if isinstance(v, dict):
+					self[k] = cmdict(v)  # no kvlist
+				elif callable(v):
+					self[k] = bind(*kvlist)
+				elif v is None:
+					self[k] = v  # NotImplementedError
+				elif kvlist[1:]:
+					self[k] = cmdict().extend(kvlist)
+			else:
+				if isinstance(self[k], dict):
+					if not isinstance(self[k], cmdict):
+						self[k] = cmdict(self[k])  # promote
+					if isinstance(v, dict):
+						if not isinstance(v, cmdict):
+							v = cmdict(v)  # promote
+						self[k].update(v)  # no kvlist
+					elif callable(v):
+						self[k][None] = bind(*kvlist)
+				elif callable(self[k]):
+					if isinstance(v, dict):
+						if k not in v or v[k] is None:
+							(self[k], v) = (cmdict(v), self[k])  # no kvlist
+							self[k][None] = v
+						else:
+							self[k] = cmdict(v)  # no kvlist
+					elif callable(v):
+						self[k] = bind(*kvlist)
+				elif kvlist[1:]:
+					self[k] = cmdict().extend(kvlist)
+		return self
 
 	def __call__(self, *args):
 		if args:
 			arg0 = args[0]
-			if arg0 in self:
+			if arg0 and arg0 in self:
 				if isinstance(self[arg0], self.__class__):
 					return self[arg0](*args[1:])
 				elif callable(self[arg0]):
 					self[arg0](*args[1:])  # leaf
 					return True
 				elif self[arg0] is None:
-					raise NotImplementedError(arg0)
+					raise NotImplementedError
 		if callable(self[None]):
-			self[None]()  # leaf
+			self[None](*args)  # leaf
 			return True
 		return False
