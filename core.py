@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import builtins
 import functools
 import signal
 
@@ -25,6 +26,34 @@ class KeyboardInterruptForward(object):
 		signal.signal(signal.SIGINT, self.__SIGINT)
 		for sig in self.__FWD:
 			self.__SIGINT(*sig)
+
+
+# ----------------------------------------------------------------------------
+# -----------------------------  input() add-on  -----------------------------
+# ----------------------------------------------------------------------------
+def input(prompt: str='', timeout: int=0):
+	if hasattr(signal, 'alarm') and hasattr(signal, 'SIGALRM'):
+		def raise_timeout_error(*sig):
+			raise TimeoutError
+		try:
+			s = None
+			handler = signal.signal(signal.SIGALRM, raise_timeout_error)
+			signal.alarm(max(int(timeout), 0))
+			if prompt:
+				s = builtins.input(prompt)
+			else:
+				s = builtins.input()
+			signal.alarm(0)
+		except TimeoutError:
+			builtins.print()
+		finally:
+			signal.signal(signal.SIGALRM, handler)
+			return s
+	else:
+		if prompt:
+			return builtins.input(prompt)
+		else:
+			return builtins.input()
 
 
 # ----------------------------------------------------------------------------
