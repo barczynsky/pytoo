@@ -32,28 +32,41 @@ class KeyboardInterruptForward(object):
 # -----------------------------  input() add-on  -----------------------------
 # ----------------------------------------------------------------------------
 def input(prompt: str='', timeout: int=0):
-	if hasattr(signal, 'alarm') and hasattr(signal, 'SIGALRM'):
+	print = builtins.print
+	input = builtins.input
+	timeout = max(int(timeout), 0)
+	if timeout and hasattr(signal, 'alarm') and hasattr(signal, 'SIGALRM'):
 		def raise_timeout_error(*sig):
 			raise TimeoutError
 		try:
+			raise_KeyboardInterrupt = False
+			raise_EOFError = False
 			s = None
 			handler = signal.signal(signal.SIGALRM, raise_timeout_error)
-			signal.alarm(max(int(timeout), 0))
+			signal.alarm(timeout)
 			if prompt:
-				s = builtins.input(prompt)
+				s = input(prompt)
 			else:
-				s = builtins.input()
+				s = input()
 			signal.alarm(0)
 		except TimeoutError:
-			builtins.print()
+			print()
+		except EOFError:
+			raise_EOFError = True
+		except KeyboardInterrupt:
+			raise_KeyboardInterrupt = True
 		finally:
 			signal.signal(signal.SIGALRM, handler)
+			if raise_KeyboardInterrupt:
+				raise KeyboardInterrupt
+			if raise_EOFError:
+				raise EOFError
 			return s
 	else:
 		if prompt:
-			return builtins.input(prompt)
+			return input(prompt)
 		else:
-			return builtins.input()
+			return input()
 
 
 # ----------------------------------------------------------------------------
@@ -95,6 +108,11 @@ class missdict(dict):
 # ---------------------------------  cmdict  ---------------------------------
 # ----------------------------------------------------------------------------
 class cmdict(dict):
+	def __init__(self, other=None, **kwargs):
+		super().__init__()
+		if other:
+			self.update(other, **kwargs)
+
 	def __contains__(self, key):
 		if not isinstance(key, str):
 			return super().__contains__(key)
