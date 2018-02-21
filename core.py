@@ -48,7 +48,6 @@ def input(prompt: str='', timeout: int=0):
 				s = input(prompt)
 			else:
 				s = input()
-			signal.alarm(0)
 		except TimeoutError:
 			print()
 		except EOFError:
@@ -56,6 +55,7 @@ def input(prompt: str='', timeout: int=0):
 		except KeyboardInterrupt:
 			raise_KeyboardInterrupt = True
 		finally:
+			signal.alarm(0)
 			signal.signal(signal.SIGALRM, handler)
 			if raise_KeyboardInterrupt:
 				raise KeyboardInterrupt
