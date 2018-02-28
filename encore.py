@@ -122,6 +122,7 @@ class FileIOTee(io.FileIO):
 class TextIOLoopback(io.TextIOWrapper):
 	def __init__(self, fo, line_buffering: bool=False, closefd: bool=False, **kwargs):
 		self.__loopback__ = []
+		self.__mode__ = True
 		self.__fo__ = fo
 		self.closefd = closefd
 		if hasattr(fo, 'line_buffering'):
@@ -142,7 +143,7 @@ class TextIOLoopback(io.TextIOWrapper):
 			self.__fo__.close()
 
 	def readline(self, size: int=-1):
-		if self.__loopback__:
+		if self.__mode__ and self.__loopback__:
 			e = self.__loopback__[0]
 			if 0 >= size or size >= len(e) >= 0:
 				return self.__loopback__.pop(0)
@@ -154,6 +155,11 @@ class TextIOLoopback(io.TextIOWrapper):
 		for line in lines:
 			self.__loopback__.extend(line.splitlines())
 		return sum(map(len, lines))
+
+	def lmode(self, mode: bool=None):
+		if mode in (True, False):
+			self.__mode__ = mode
+		return self.__mode__
 
 
 # ----------------------------------------------------------------------------
